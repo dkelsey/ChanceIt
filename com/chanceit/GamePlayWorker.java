@@ -520,10 +520,11 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
               synchronized (gameLog) {
                   try {
 
-                      gameLog.write(String.format("WINNER:%s,score:%s,LOSER:%s,score:%s,HOW:%s\n",
+                                    /* csv header: winner,wscore,loser,lscore,how */
+                      gameLog.write(String.format("%s,%s,%s,%s,%s\n",
                                   /* winner => */  winnerName, winnerScore,
-                                  /* loser => */  loserName, loserScore,
-                                                 how));
+                                  /* loser => */   loserName, loserScore,
+                                                   how));
                       gameLog.flush() ;  // leaving this uncomented for now.
                   } catch (IOException e) {}
               }

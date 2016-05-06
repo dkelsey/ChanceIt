@@ -97,11 +97,10 @@ public class ChanceItServer2 {
         // GamePlayWorker pool thread count
         GAME_PLAY_WORKER_THREAD_COUNT = Integer.parseInt(prop.getProperty("gameplayworker_pool_thread_count", "4")); // must be an even number
 
-
         /*
          *  Log file for Game outcomes
          */
-        GAME_LOG = prop.getProperty("game_log", "./gameLog.txt") ;
+        GAME_LOG = prop.getProperty("game_log", "./gameLog.csv") ;
 
     } catch (IOException e ) {
         e.printStackTrace() ;
@@ -126,6 +125,10 @@ public class ChanceItServer2 {
 
       FileWriter fstream = new FileWriter(GAME_LOG) ;
       gameLog = new BufferedWriter(fstream);
+
+      // write the CSV header
+      gameLog.write("winner,wscore,loser,lscore,how\n");
+      gameLog.flush() ;
 
     } catch (IOException e) {}
 
