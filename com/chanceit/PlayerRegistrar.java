@@ -130,7 +130,6 @@ class PlayerRegistrar extends Thread implements RunnableRecycler {
          /*
           *    Wait for a GOODBYE:PLAYERNAME messsage:
           */
-          //try {
           socket.setSoTimeout(GOODBYE_LOOP_TIMEOUT);  // 1 second
           while (canUnregister == true) {
 
@@ -161,34 +160,24 @@ class PlayerRegistrar extends Thread implements RunnableRecycler {
                         }
                      }
                   } else if (canUnregister == false ) {  // we are part of a game and all message are for the GamePlayWorker thread
-                      /*
-                             command.length() == 0 ||             // 'Y' is default for chance-it.  a CR is the same and will have a 0 length
-                             command.startsWith("Y") ||           // 'Y' means "chance-it"
-                             command.startsWith("chance-it") ||   //
-                             command.startsWith("n") ||           // 'n' means don't chance-it
-                             command.startsWith("stop")) {        // 'stop' means stop the game
-                       */
-
                       // very "cludgie" but I could not find another way to unblock the readLine on the socket.
                       // at this point we are in game play.  The readLine above occurred before the game started.
                       // there is another block on IO on the socket in the GamePlayWorker thread looking for the String
                       // "chance-it".  Here I'll set a local variable that will be read by the other thread.
                       // could do a wait on the object in the other thread and a notify here.
                       // !!! perhaps this should be a callback too ?
-              //        System.out.println(Thread.currentThread().getName() + ": :" + name + ": got chance-it from PlayerRegistrar thread");
                       this.message = command;
                       callback.setState(RegistrationWaitState.WAIT_TURN);
                       callback.setMessage(command) ;
                   }
               } catch (InterruptedIOException e) {
-                  if (canUnregister == false) {
-                    // This a call back as the state of this thread isn't guaranteed and could potentially reused by another Player registerring.
-                    // If canUnregister == false we can't unregister.  An ActivePlayer object has been instantiated and this PlayerRegistration
-                    // has had a callback set.
-                    callback.setState(RegistrationWaitState.WAIT_TURN);
-                    state = RegistrationWaitState.WAIT_TURN;
-          //          System.out.println(Thread.currentThread().getName() + ": :" + name + ": kicking out of PlayerRegistrar thread");
-                  }
+                    if (canUnregister == false) {
+                      // This a call back as the state of this thread isn't guaranteed and could potentially reused by another Player registerring.
+                      // If canUnregister == false we can't unregister.  An ActivePlayer object has been instantiated and this PlayerRegistration
+                      // has had a callback set.
+                      callback.setState(RegistrationWaitState.WAIT_TURN);
+                      state = RegistrationWaitState.WAIT_TURN;
+                    }
               } catch (NullPointerException npe) {
                   // a NPE here means socket closed by client
                   System.out.println("Socket disconnected before getting GOODBYE");
@@ -208,10 +197,6 @@ class PlayerRegistrar extends Thread implements RunnableRecycler {
                   return ;
               }
         }
-        //} catch (InterruptedException e) {
-        //    // meh do nothing?
-        //    System.out.println("Thead was interrupted");
-        //}
      } catch (IOException e) {}
     /*
      *    wait for a GOODBYE:PLAYERNAME messsage:
@@ -252,8 +237,5 @@ class PlayerRegistrar extends Thread implements RunnableRecycler {
       //    block on QUEUE {
       //       the logic is expressed better above.
       //    }
-/*
-      System.out.println(Thread.currentThread().getName() + " has finished") ;
- */
-  }  // end of the PlayerRegistrar thread
+  }   // end of the PlayerRegistrar thread
 }
