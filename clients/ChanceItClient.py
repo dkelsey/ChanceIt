@@ -1,6 +1,9 @@
 import socket
+import sys
+import time
 
 NUMBER_OF_TURNS = 2
+PLAYER_NAME = sys.argv[1]
 
 
 class ChanceItClient:
@@ -45,16 +48,18 @@ if __name__ == "__main__":
     client.connect('localhost', 1099)
 
     # identify yourself
-    client.send("HELLO:McLovin\n")
+    client.send("HELLO:%s\n" % PLAYER_NAME)
 
     # assert you get confirmation with the "IS IT ME YOUR LOOKING FOR"
     data = client.readLine()
-    print data
+    # print data
     if data.startswith("IS IT ME YOU'RE LOOKIN FOR?"):
         print "got HELLO response"
     else:
         print data
+#    print "HERE HERE HERE"
 
+    '''
     # assert you get Welcome "name"
     data = client.readLine()
     print data
@@ -62,6 +67,7 @@ if __name__ == "__main__":
         print "got Welcome response"
     else:
         print data
+        '''
 
     # assert you get the OPPONENT message
     data = client.readLine()
@@ -75,59 +81,68 @@ if __name__ == "__main__":
     data = client.readLine()
     if data.startswith("Your roll was: "):
         # get your starting roll
-        roll = data[len("Your roll was: "):]
+        roll = data[len("Your roll was: "):data.find(". Opponent roll was:")]
         print "roll was: %s" % roll
 
     # print "entering turn loop"
     turnNumber = rollNumber = totalScore = score = 0
+    counter = 0
     while (True):
+        counter += 1
         '''
-            Turn: 1
-            Roll: 2
-            Score: 16-38
-            Turn Score: 23
-            chance-it?
-
-            or
-
-            Turn: 1
-            Roll: 2
-            Score: 16-38
-            Turn Score: 23
-            chance-it?
-
+            Turn#: 1
+            Roll#: 2
+            Turn Starting Score: 16-38
+            Running Turn Score: 23
+            Roll Score: 8
+            You Rolled: [4,4]
+            --
+            chance-it? [Y/n]
         '''
         data = client.readLine()
-        if data.startswith("Turn: "):
-            turnNumber = int(data[len("Turn: "):])
+        print data
+        if data.startswith("Turn#: "):
+            turnNumber = int(data[len("Turn#: "):])
             print "_turn: %s" % turnNumber
+        '''
         else:
-            '''
-                If both players roll the same on the first roll
-                A subsequent roll will happen.
-                Though unlikely, this can potentially occur more than once.
-            '''
+
             while data.startswith("Your roll was: "):
                 data = client.readLine()
 
-            if data.startswith("Turn: "):
-                turnNumber = int(data[len("Turn: "):])
+            if data.startswith("Turn#: "):
+                turnNumber = int(data[len("Turn#: "):])
                 print "_turn: %s" % turnNumber
+            '''
 
         data = client.readLine()
-        if data.startswith("Roll: "):
-            rollNumber = int(data[len("Roll: "):])
+        if data.startswith("Roll#: "):
+            rollNumber = int(data[len("Roll#: "):])
             print "_roll: %s" % rollNumber
 
         data = client.readLine()
         if data.startswith("Score: "):
-            totalScore = int(data[len("Score: "):data.find("-")])
+            totalScore = int(data[len("Turn Starting Score: "):data.find("-")])
             print "_total score: %s __total score: %s" % (totalScore, data)
 
         data = client.readLine()
-        if data.startswith("Turn Score: "):
-            score = int(data[len("Turn Score: "):])
+        if data.startswith("Running Turn Score: "):
+            score = int(data[len("Running Turn Score: "):])
             print "_score: %s" % score
+
+        data = client.readLine()
+        if data.startswith("Roll Score: "):
+            roll = int(data[len("Roll Score: "):])
+            print "_roll_score: %s" % roll
+
+        data = client.readLine()
+        if data.startswith("You Rolled: []"):
+            roll = int(data[len("You Rolled: "):])
+            print "_rolled: %s" % roll
+
+        data = client.readLine()
+        if data.startswith("--"):
+            print "_separater: %s" % data
 
         '''
             When score == 0 we've rolled the same value as our first roll for this turn.
@@ -141,16 +156,19 @@ if __name__ == "__main__":
         elif 0 != score:
             # we did not roll the same value as the first roll for this turn :)
             # assert we get the 'chance-it?' prompt
+
             data = client.readLine()
-            print "## %s" % data
-            if data.startswith("chance-it?"):
+            # print "!! %s" % data
+            if data.startswith("chance-it? [Y/n]"):
                 # depending on what you want to do, chance-it
                 if score < 30:
-                    print "# chance-it"
-                    client.send("chance-it\n")
+                    time.sleep(1)
+                    print "# chance-it [CR]"
+                    # client.send("chance-it\n")
+                    client.send("\r\n")
                 else:
-                    print "# stop"
-                    client.send("stop\n")
+                    print "# 'n'"
+                    client.send("n\n")
                     if turnNumber == NUMBER_OF_TURNS:
                         # the game is over so block on a read from the socket to learn who won
                         data = client.readLine()
