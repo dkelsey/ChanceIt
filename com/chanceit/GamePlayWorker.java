@@ -339,9 +339,9 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
           this.prop = prop ;
           this.gameLog = gameLog ;
           this.gameOn = false ;
-          this.NUMBER_OF_TURNS = Integer.parseInt(prop.getProperty("number_of_turns", "2")) ;
-          this.PLAYER_INPUT_TIMEOUT = Integer.parseInt(prop.getProperty("player_input_timeout", "10")) ;
-          this.ROLL_TIME = Integer.parseInt(prop.getProperty("roll_time", "1")) ;
+          this.NUMBER_OF_TURNS = Integer.parseInt(prop.getProperty("number_of_turns", "20")) ;
+          this.PLAYER_INPUT_TIMEOUT = Integer.parseInt(prop.getProperty("player_input_timeout", "60")) ; // 60 sec
+          this.ROLL_TIME = Integer.parseInt(prop.getProperty("roll_time", "1")) ; // 1 sec
           this.playerData = new Data() ;
       }
 

@@ -152,12 +152,14 @@ public class ChanceItServer2 {
         new LinkedBlockingQueue<Runnable>()
         ) ;
 
+    /*
     PoolMonitor regstrarPoolMonitor = new PoolMonitor((ThreadPoolExecutor)playerRegistrarPool, 3, "PlayerRegistrarPool") ;
     Thread registrarMonitorThread = new Thread(regstrarPoolMonitor) ;
     registrarMonitorThread.start() ;
+    */
 
     System.out.println("    playerRegistrarPool executor created...");
-    System.out.println("      playerRegistrarPool PoolMonitor created") ;
+    // System.out.println("      playerRegistrarPool PoolMonitor created") ;
 
      // spark up some workers
      for (int i = 0; i< PLAYER_REGISTRAR_THREAD_COUNT; i++) {
@@ -166,7 +168,7 @@ public class ChanceItServer2 {
          playerRegistrarPool.execute(playerRegistrar) ;
 
      }
-     System.out.println(String.format("    created %d PlayerRegistrar Threads...", 10));
+     System.out.println(String.format("    created %d PlayerRegistrar Threads...", PLAYER_REGISTRAR_THREAD_COUNT));
 
     /*
      * spark up a pool of GamePlayWorker(s)
@@ -179,12 +181,14 @@ public class ChanceItServer2 {
         new LinkedBlockingQueue<Runnable>()
         ) ;
 
+    /*
     PoolMonitor gamePlayWorkerPoolMonitor = new PoolMonitor((ThreadPoolExecutor)gamePlayWorkerPool, 3, "GamePlayWorkerPool") ;
     Thread gamePlayMonitorThread = new Thread(gamePlayWorkerPoolMonitor) ;
     gamePlayMonitorThread.start() ;
+    */
 
     System.out.println("    gamePlayWorkerPool executor created...");
-    System.out.println("      gamePlayWorkerPool PoolMonitor created");
+    // System.out.println("      gamePlayWorkerPool PoolMonitor created");
      // spark up some workers
      for (int i = 0; i< GAME_PLAY_WORKER_THREAD_COUNT; i++) {
 
@@ -192,7 +196,7 @@ public class ChanceItServer2 {
          gamePlayWorkerPool.execute(gamePlayWorker) ;
 
      }
-     System.out.println(String.format("    created %d GamePlayWorker Threads...", 10));
+     System.out.println(String.format("    created %d GamePlayWorker Threads...", GAME_PLAY_WORKER_THREAD_COUNT));
 
 
     /*
