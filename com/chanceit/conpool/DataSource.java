@@ -16,8 +16,8 @@ public class DataSource {
         cpds = new ComboPooledDataSource();
         cpds.setDriverClass("com.mysql.jdbc.Driver"); //loads the jdbc driver
         cpds.setJdbcUrl("jdbc:mysql://localhost:3306/chance_it?useSSL=false");
-        cpds.setUser("rovans");
-        cpds.setPassword("Jasper!16");
+        cpds.setUser("USER");
+        cpds.setPassword("p@55w0rd");
 
         // the settings below are optional -- c3p0 can work with defaults
         cpds.setInitialPoolSize(5);
