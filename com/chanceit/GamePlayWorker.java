@@ -19,30 +19,43 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
       // not set from a property
       private int OPPONENT_NOTIFY_DELAY = 1 ; // 1 second delay before notifying each player who their opponent is.
       private static final String WINNER_MESSAGE = "You Win!" ;
+      private static final String WINNER_MESSAGE_BY_TIMEOUT = "You Win! %s Timed Out." ;
+      private static final String WINNER_MESSAGE_BY_DISCONNECT = "You Win! %s Disconnected." ;
+      private static final String WINNER_MESSAGE_BY_FORFEIT = "You Win! %s Stopped." ;
       private static final String LOSER_MESSAGE = "You Lose." ;
+      private static final String LOSER_MESSAGE_BY_FORFEIT = "You Lose by Forfeit." ;
+      private static final String LOSER_MESSAGE_BY_TIMEOUT = "You Lose by Timeout." ;
       private static final String TIE_MESSAGE = "It's a Draw." ;
+      private static final String FINAL_SCORE = "Final Score: %s: %d, %s: %d" ;
 
      /*
       * There is a requirement that players can unregister before they get added to a game.
       *
       * This sets up a problems:  the registration thread will block on IO (after completing registration with the HELLO message) anticipating
       * a GOODBYE message.  The GamePlayWorker, in another thread, can have picked up the registration and added it to a game.  Note: it does
-      * so in a synchronized block around the registrationQueue, where it sets gameOn and canUnregister == false.  The GamePlayWorker continues
-      * on to giving a turn to each player; they emit a "chance-it?" and wait on IO on the input stream.  Here lies the problem: the registrar
-      * thread is already waiting on the same input stream.  The solution was to set a timeout of 1 second in the registrar thread and check
-      * after each timeout to see if canUnregister == false-- this will terminate the loop.  In the GamePlayWorker thread, I set a short timeout
-      * on the input socket.  The timeouts will be subsequential: first the registrar IO block will timeout, then the GamePlayWorker IO block
-      * will.  Following the timout in the GamePlayWorker thread, a check will be performed to see whether input was received from either the
+      * so in a synchronized block around the registrationQueue: it sets gameOn and canUnregister == false in the PlayerRegistrar object.
+      * After the registration have been added to a game the GamePlayWorker continues
+      * on to giving a turn to each player; they emit a "chance-it?" and wait on IO on the input stream.  And...
+      * Here lies the problem:
+      *
+      *   The registrar thread is already waiting on the same input stream--blocke on IO on the socket.
+      *
+      * The solution was to set a timeout of 1 second in the registrar thread and check, before doing the "realLine" for "GOODBYE".
+      * After each timeout perform a check for 'canUnregister == false'-- this will terminate the loop.
+      * In the GamePlayWorker thread, I set a short timeout on the input socket.  The timeouts will be sequential:
+      *   first the registrar IO block will timeout,
+      *   then the GamePlayWorker IO block and timeout.
+      * Following the timout in the GamePlayWorker thread, a check will be performed to see whether input was received from either the
       * registrar thread or from the GamePlayWorker thread.  The SHORT_IO_TIMOUT below is the timeout period of the GamePlayWorker thead.
       */
       private int SHORT_IO_TIMEOUT = 250 ;  // used in ActivePlayer.  The registration thread can be blocked on IO when the game thread
-                                          // is also blocked on IO.  This can occur on the first turn of a game.  The registration thread
-                                          // will timeout after 1 second, check if  it is now part of a game.  The IO block in the game
-                                          // thread will timeout quickly and check whether the registration thread received data or the game
-                                          // thread received data. ... complicated, I know.  This is required so that players have the
-                                          // ability to unregister before a game starts.
+                                            // is also blocked on IO.  This can occur on the first turn of a game.  The registration thread
+                                            // will timeout after 1 second, check if  it is now part of a game.  The IO block in the game
+                                            // thread will timeout quickly and check whether the registration thread received data or the game
+                                            // thread received data. ... complicated, I know.  This is required so that players have the
+                                            // ability to unregister before a game starts.  Note: i chose 250 miliseconds arbirarily
 
-      // these will be overriden in the construcor by valuse from config.properties
+      // these will be overriden in the construcor by values from config.properties
       private int NUMBER_OF_TURNS = 2;        // the number of turns that make up a game.
       private int PLAYER_INPUT_TIMEOUT = 10 ; // number of seconds the server waits for input from a player.
       private int ROLL_TIME = 1 ;             // a sumulation of how long a roll takes
@@ -122,15 +135,14 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
 
           private void displayStats(int turnNumber, int rollNumber, int startingScore, int opponentStartScore, int turnAccumulation, int turnScore, int rolledDie1, int rolledDie2){
               output.println(String.format(
-                  "Turn#: %d\nRoll#: %d\nTurn Starting Score: %d-%d\nRunning Turn Score: %d\nRoll Score: %d\nYou Rolled: [%d,%d]\n--",
-                      turnNumber + 1,
-                      rollNumber,
+                  "Turn Starting Score: %d-%d\nTurn#: %d\nRoll#: %d\nYou Rolled: [%d,%d]\nRunning Turn Score: %d\n--",
                       startingScore,
                       opponentStartScore,
-                      turnAccumulation,
-                      turnScore,
+                      turnNumber + 1,
+                      rollNumber,
                       rolledDie1,
-                      rolledDie2
+                      rolledDie2,
+                      turnAccumulation
                         ));
           }
 
@@ -139,35 +151,33 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
               /*
                * This is tricky as there is a race condition between threads:
                *   PlayerRegistrar thread is blocking waiting for GOODBYE message
-               *   This thread wants to block/receive the next command -- Y || '' || n || stop
+               *   This thread wants to block/receive the next command -- 'Y' || '' || 'chance-it' || 'n' || 'stop'
                */
               String command = null;
 
               if (state != null && state == RegistrationWaitState.WAIT_TURN){
 
                   // change here
-                  // output.println("chance-it? [Y/n]");
                   command = input.readLine();
                   if (command == null) {
-                      // this means the player has terminated or disconnected the socket.
-                      // this player forfeits the game.
+                      // This means the player has terminated or disconnected the socket.
+                      // This player forfeits the game.
                       throw new ActivePlayerDisconnectException(/*winner=*/this.opponent, /* loser-*/this);
                   }
 
               } else if (this.pr != null && this.pr.state == RegistrationWaitState.WAIT_GOODBYE) {
                   // The corresponding registration thread is blocked waiting on IO on the socket in anticipation of a GOODBYE msg.
-                  // The readLine will block next after the other readline gets data.
-                  // set a short timeout on the socket -- this will only affect the preceding wait on IO.
-                  // after this times out...there will be no data (I hope :) ) received from this readline, buto
-                  // the other one in the other thread will have data and set pr.message.
+                  // The readLine will block next after the other readline gets data or times-out.
+                  // I set a short timeout on the socket -- this will only affect the preceding wait on IO.
+                  // After this times out...there will be no data (I hope :) ) received from this readline, but
+                  // the other block in the other thread will have data and set pr.message.
                   // get the value of pr.message.
                   String nextCommand = "";
                   // reset the timeout on the socket.
                   int oldTimout = socket.getSoTimeout();
                   socket.setSoTimeout(GamePlayWorker.this.SHORT_IO_TIMEOUT); // set a short timeout. -- may want to put the "chance-it" prompt in this block?
                   try {
-                      // change here
-                      // output.println("chance-it? [Y/n]");
+
                       nextCommand = input.readLine();  // could this potentially receive 'chance-it' given I've now set a
                                                        // 1 sec timeout on the socket in the PlayerRegistrar thread ?
                       if (null != nextCommand) {
@@ -179,7 +189,7 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                     // if we are here the readLine timedout without data.  The PlayerRegistrar thread could have received data so check in the finally
                   } finally {
                         // The other thead has to be unblocked/received data before controll passes to this thread and
-                        // runs the input.readLine() and Times out.
+                        // performs input.readLine() and Times out.
                         if (null != this.pr.message) {
                             // got command from the PlayerRegistrar thread
                             command = this.pr.message ;
@@ -212,25 +222,10 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                       rollNum = -1,
                       startingScore = playerData.player0Score;
 
-
-                  /*
-                  output.println(String.format("Turn: %d\nRoll: %d\nStarting Score: %d-%d\nRunning Score: %d\nTurn Score: %d\nYou Rolled: [%d,%d]\n--",
-                                                turnNumber + 1,
-                                                rollNum,
-                                                startingScore,
-                                                //playerData.player0Score + firstRollDie1 + firstRollDie2,
-                                                playerData.player1Score,
-                                                playerData.player0Score,
-                                                turnAccumulation,
-                                                firstRollDie1,
-                                                firstRollDie2
-                                                ));
-                                                */
-
                   while (true) {
 
                       rollNum++;
-                      //output.println("chance-it?");
+
                       if (0 == rollNum){  // on first roll
                           // take the first roll, show stats and prompt player
                           firstRollDie1 = rolledDie1 = die.nextInt(6) + 1;
@@ -239,22 +234,7 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                           // accumulate this score
                           turnAccumulation += rolledDie1 + rolledDie2 ;
                           // show stats and prompt player for next moove will occurr in the next loop
-/*
-//                          // show stats
-//                          displayStats(turnNumber + 1, rollNum, startingScore, playerData.player1Score, /* playerData.player0Score,* / turnAccumulation, rolledDie1, rolledDie2) ;
-                          /*
-                            output.println(String.format("Turn: %d\nRoll: %d\nStarting Score: %d-%d\nRunning Score: %d\nTurn Score: %d\nYou Rolled: [%d,%d]\n--",
-                                                      turnNumber + 1,
-                                                      rollNum,
-                                                      startingScore,
-                                                      //playerData.player0Score + firstRollDie1 + firstRollDie2,
-                                                      playerData.player1Score,
-                                                      playerData.player0Score,
-                                                      turnAccumulation,
-                                                      firstRollDie1,
-                                                      firstRollDie2
-                                                      ));
-                            */
+
                       } else {
                            // show stats, prompt for command, grab command,  follow instructions, loop or not
 
@@ -314,7 +294,6 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                     playerData.player0Score += turnAccumulation ;
 
                 } catch (InterruptedIOException iioe) {
-                    output.println("Other player wins");
                     // re-throw the exception and catch it in the loop to end the game.
                     // include a reference to the other player -- the winner.
                     throw new ActivePlayerTimeoutException(/*winner=*/this.opponent, /* loser-*/this);
@@ -347,6 +326,7 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
 
      /*
       *  GamePlayWorker objects are re-used in the ExecutorService therefore certain data members need to be reset.
+      *  Thus GamePlayWorker implements the RunnableRecycler interface here.
       */
       @Override
       public void resetData() {
@@ -451,17 +431,27 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                        } catch (GamePlayWorker.ActivePlayerTimeoutException apte) {
                            // currentPlayer player timed out so they loose the game
                            logGameOutcome(apte.winner.name, playerData.player1Score, apte.loser.name, playerData.player0Score, "TIMEOUT") ;
-                           apte.winner.output.println(WINNER_MESSAGE);
+                           apte.winner.output.println(String.format(WINNER_MESSAGE_BY_TIMEOUT, apte.loser.name));
+                           apte.winner.output.println(String.format(FINAL_SCORE, apte.winner.name, playerData.player1Score, apte.loser.name, playerData.player0Score));
+
+                           apte.loser.output.println(LOSER_MESSAGE_BY_TIMEOUT);
+                           apte.loser.output.println(String.format(FINAL_SCORE, apte.winner.name, playerData.player1Score, apte.loser.name, playerData.player0Score));
+
                            return ;
                        } catch (GamePlayWorker.ActivePlayerDisconnectException apde) {
                            // currentPlayer player Disconnected out so they loose the game
                            logGameOutcome(apde.winner.name, playerData.player1Score, apde.loser.name, playerData.player0Score, "DISCONNECT") ;
-                           apde.winner.output.println(WINNER_MESSAGE);
+                           apde.winner.output.println(String.format(WINNER_MESSAGE_BY_DISCONNECT, apde.loser.name));
+                           apde.winner.output.println(String.format(FINAL_SCORE, apde.winner.name, playerData.player1Score, apde.loser.name, playerData.player0Score));
                            return ;
                        } catch (GamePlayWorker.ActivePlayerStopException apse) {
                            // currentPlayer player Disconnected out so they loose the game
                            logGameOutcome(apse.winner.name, playerData.player1Score, apse.loser.name, playerData.player0Score, "STOP") ;
-                           apse.winner.output.println(WINNER_MESSAGE);
+                           apse.winner.output.println(String.format(WINNER_MESSAGE_BY_FORFEIT, apse.loser.name));
+                           apse.winner.output.println(String.format(FINAL_SCORE, apse.winner.name, playerData.player1Score, apse.loser.name, playerData.player0Score));
+
+                           apse.loser.output.println(LOSER_MESSAGE_BY_FORFEIT);
+                           apse.loser.output.println(String.format(FINAL_SCORE, apse.winner.name, playerData.player1Score, apse.loser.name, playerData.player0Score));
                            return ;
                        }
                        try {
@@ -476,17 +466,26 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                        } catch (GamePlayWorker.ActivePlayerTimeoutException apte) {
                            // currentPlayer player timed out so they loose the game
                            logGameOutcome(apte.winner.name, playerData.player1Score, apte.loser.name, playerData.player0Score, "TIMEOUT") ;
-                           apte.winner.output.println(WINNER_MESSAGE);
+                           apte.winner.output.println(String.format(WINNER_MESSAGE_BY_TIMEOUT, apte.loser.name));
+                           apte.winner.output.println(String.format(FINAL_SCORE, apte.winner.name, playerData.player1Score, apte.loser.name, playerData.player0Score));
+
+                           apte.loser.output.println(LOSER_MESSAGE_BY_TIMEOUT);
+                           apte.loser.output.println(String.format(FINAL_SCORE, apte.winner.name, playerData.player1Score, apte.loser.name, playerData.player0Score));
                            return ;
                        } catch (GamePlayWorker.ActivePlayerDisconnectException apde) {
                            // currentPlayer player Disconnected out so they loose the game
                            logGameOutcome(apde.winner.name, playerData.player1Score, apde.loser.name, playerData.player0Score, "DISCONNECT") ;
-                           apde.winner.output.println(WINNER_MESSAGE);
+                           apde.winner.output.println(String.format(WINNER_MESSAGE_BY_DISCONNECT, apde.loser.name));
+                           apde.winner.output.println(String.format(FINAL_SCORE, apde.winner.name, playerData.player1Score, apde.loser.name, playerData.player0Score));
                            return ;
                        } catch (GamePlayWorker.ActivePlayerStopException apse) {
                            // currentPlayer player Disconnected out so they loose the game
                            logGameOutcome(apse.winner.name, playerData.player1Score, apse.loser.name, playerData.player0Score, "STOP") ;
-                           apse.winner.output.println(WINNER_MESSAGE);
+                           apse.winner.output.println(String.format(WINNER_MESSAGE_BY_FORFEIT, apse.loser.name));
+                           apse.winner.output.println(String.format(FINAL_SCORE, apse.winner.name, playerData.player1Score, apse.loser.name, playerData.player0Score));
+
+                           apse.loser.output.println(LOSER_MESSAGE_BY_FORFEIT);
+                           apse.loser.output.println(String.format(FINAL_SCORE, apse.winner.name, playerData.player1Score, apse.loser.name, playerData.player0Score));
                            return ;
                        }
                    }
@@ -494,16 +493,26 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                    // notifiy the winner and the loser
                    if (playerData.player0Score > playerData.player1Score) {
                        logGameOutcome(currentPlayer.name, playerData.player0Score, currentPlayer.opponent.name, playerData.player1Score, "FAIR_PLAY") ;
+                       // winner notice
                        currentPlayer.output.println(WINNER_MESSAGE);
+                       currentPlayer.output.println(String.format(FINAL_SCORE, currentPlayer.name, playerData.player0Score, currentPlayer.opponent.name, playerData.player1Score));
+                       // loser notice
                        currentPlayer.opponent.output.println(LOSER_MESSAGE);
+                       currentPlayer.opponent.output.println(String.format(FINAL_SCORE, currentPlayer.name, playerData.player0Score, currentPlayer.opponent.name, playerData.player1Score));
                    } else if (playerData.player0Score < playerData.player1Score) {
                        logGameOutcome(currentPlayer.opponent.name, playerData.player1Score, currentPlayer.name, playerData.player0Score, "FAIR_PLAY") ;
+                       // winner notice
                        currentPlayer.opponent.output.println(WINNER_MESSAGE);
+                       currentPlayer.opponent.output.println(String.format(FINAL_SCORE, currentPlayer.name, playerData.player0Score, currentPlayer.opponent.name, playerData.player1Score));
+                       // loser notice
                        currentPlayer.output.println(LOSER_MESSAGE);
+                       currentPlayer.output.println(String.format(FINAL_SCORE, currentPlayer.name, playerData.player0Score, currentPlayer.opponent.name, playerData.player1Score));
                    } else { // it's a draw
                        logGameOutcome(currentPlayer.opponent.name, playerData.player1Score, currentPlayer.name, playerData.player0Score, "FAIR_PLAY||TIE") ;
                        currentPlayer.opponent.output.println(TIE_MESSAGE);
+                       currentPlayer.opponent.output.println(String.format(FINAL_SCORE, currentPlayer.name, playerData.player0Score, currentPlayer.opponent.name, playerData.player1Score));
                        currentPlayer.output.println(TIE_MESSAGE);
+                       currentPlayer.output.println(String.format(FINAL_SCORE, currentPlayer.name, playerData.player0Score, currentPlayer.opponent.name, playerData.player1Score));
                    }
 
                } finally {
