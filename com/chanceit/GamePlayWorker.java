@@ -267,7 +267,7 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                                    // rolled the same as first roll so this turn gets 0
                                    turnAccumulation = 0 ;
                                    // show stats
-                                   displayStats(turnNumber, rollNum, startingScore, playerData.player1Score, turnAccumulation, rolledDie1 + rolledDie2, rolledDie1, rolledDie2) ;
+                                   displayStats(turnNumber, rollNum + 1, startingScore, playerData.player1Score, turnAccumulation, rolledDie1 + rolledDie2, rolledDie1, rolledDie2) ;
 
                                    // break out of the turn loop
                                    break;
