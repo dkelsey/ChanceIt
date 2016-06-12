@@ -123,7 +123,7 @@ public class ChanceItServer2 {
     BufferedWriter gameLog = null ;
     try {
 
-      FileWriter fstream = new FileWriter(GAME_LOG) ;
+      FileWriter fstream = new FileWriter(GAME_LOG, true) ; // append to the log file.
       gameLog = new BufferedWriter(fstream);
 
       // write the CSV header
