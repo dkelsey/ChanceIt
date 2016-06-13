@@ -56,9 +56,9 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                                             // ability to unregister before a game starts.  Note: i chose 250 miliseconds arbirarily
 
       // these will be overriden in the construcor by values from config.properties
-      private int NUMBER_OF_TURNS = 2;        // the number of turns that make up a game.
-      private int PLAYER_INPUT_TIMEOUT = 10 ; // number of seconds the server waits for input from a player.
-      private int ROLL_TIME = 1 ;             // a sumulation of how long a roll takes
+      private int NUMBER_OF_TURNS = 2;               // the number of turns that make up a game.
+      private int PLAYER_INPUT_TIMEOUT = 10 * 1000 ; // number of seconds (in milliseconds) the server waits for input from a player.
+      private int ROLL_TIME = 250 ;                  // a sumulation of how long a roll takes (in milliseconds)
       private BufferedWriter gameLog ;
 
       ConcurrentLinkedQueue<PlayerRegistrar> registrationQueue ;
@@ -249,7 +249,7 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                            String command = getNextCommand() ;
 
                            // simulate a human roll of the dice
-                           Thread.sleep(1000 * 1) ;
+                           Thread.sleep(ROLL_TIME) ;
                            //Thread.sleep(500 * 1) ;
 
                            // [Y/n] means pressing enter defaults to 'Y'
@@ -319,8 +319,8 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
           this.gameLog = gameLog ;
           this.gameOn = false ;
           this.NUMBER_OF_TURNS = Integer.parseInt(prop.getProperty("number_of_turns", "20")) ;
-          this.PLAYER_INPUT_TIMEOUT = Integer.parseInt(prop.getProperty("player_input_timeout", "60")) ; // 60 sec
-          this.ROLL_TIME = Integer.parseInt(prop.getProperty("roll_time", "1")) ; // 1 sec
+          this.PLAYER_INPUT_TIMEOUT = Integer.parseInt(prop.getProperty("player_input_timeout", "60000")) ; // 60 sec
+          this.ROLL_TIME = Integer.parseInt(prop.getProperty("roll_time", "250")) ; // 1/4 sec or 250 milliseconds
           this.playerData = new Data() ;
       }
 
@@ -390,7 +390,7 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
            //    • close the sockets each player has open.
            if (false) {
                try {
-                 Thread.sleep(1000 * ROLL_TIME);      // sleep 1 second
+                 Thread.sleep(ROLL_TIME);                 // sleep 1/4 second
                  ap1.output.println(WINNER_MESSAGE);      // notify player 1 they won
                  System.out.println(String.format("     > Player %s WON!!!", ap1.name));
                  ap2.output.println(LOSER_MESSAGE);     // notify player 2 they lost
@@ -412,8 +412,8 @@ class GamePlayWorker extends Thread implements RunnableRecycler {
                currentPlayer = getWhoGoesFirst();
 
                // set socket timeouts
-               ap1.setSocketTimeout(1000 * PLAYER_INPUT_TIMEOUT);
-               ap2.setSocketTimeout(1000 * PLAYER_INPUT_TIMEOUT);
+               ap1.setSocketTimeout(PLAYER_INPUT_TIMEOUT); // TIMEOUT is in milliseconds
+               ap2.setSocketTimeout(PLAYER_INPUT_TIMEOUT);
 
                try {
                    // the game turn loop
